@@ -1,0 +1,16 @@
+{
+  "name": "bld-remote-browser-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "Control server: spins up a Chromium Docker container, streams it over WebSocket, relays input.",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "puppeteer-core": "^23.11.1",
+    "ws": "^8.18.0"
+  }
+}
