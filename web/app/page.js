@@ -11,6 +11,29 @@ function buttonName(b) {
   return b === 2 ? 'right' : b === 1 ? 'middle' : 'left';
 }
 
+function CursorGlyph({ size = 18, color = '#04160d' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M8 5 L8 19 L11.4 15.8 L13.9 20.4 L15.8 19.5 L13.3 15 L17.6 15 Z" fill={color} />
+    </svg>
+  );
+}
+
+function Logo({ size = 46 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="logoGrad" x1="4" y1="3" x2="28" y2="29" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#4ade9f" />
+          <stop offset="1" stopColor="#34d399" />
+        </linearGradient>
+      </defs>
+      <rect x="2" y="2" width="28" height="28" rx="7" fill="url(#logoGrad)" />
+      <path d="M11 7 L11 24 L15 20 L18.2 26 L20.6 24.8 L17.4 19 L22.6 19 Z" fill="#04160d" />
+    </svg>
+  );
+}
+
 export default function Home() {
   const wsRef = useRef(null);
   const canvasRef = useRef(null);
@@ -20,10 +43,11 @@ export default function Home() {
   const lastMove = useRef(0);
 
   const [state, setState] = useState('stopped');
-  const [statusMsg, setStatusMsg] = useState('Idle');
+  const [statusMsg, setStatusMsg] = useState('Connecting to control server…');
   const [url, setUrl] = useState('https://example.com');
 
   const running = state === 'running';
+  const phase = running ? 'live' : state === 'starting' ? 'connecting' : 'idle';
   useEffect(() => { runningRef.current = running; }, [running]);
 
   const sendMsg = useCallback((m) => {
@@ -36,7 +60,7 @@ export default function Home() {
     ctxRef.current = canvasRef.current.getContext('2d');
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
-    ws.onopen = () => setStatusMsg('Connected to control server');
+    ws.onopen = () => setStatusMsg('Connected — ready to launch');
     ws.onclose = () => setStatusMsg('Disconnected from control server');
     ws.onerror = () => setStatusMsg('Cannot reach control server (is it running on :5000?)');
     ws.onmessage = (ev) => {
@@ -110,36 +134,58 @@ export default function Home() {
   const stop = () => sendMsg({ type: 'stop' });
   const go = (e) => { e.preventDefault(); if (running) sendMsg({ type: 'navigate', url }); };
 
-  return (
-    <main style={styles.main}>
-      <header style={styles.header}>
-        <div style={styles.title}>🖥️ BLD Remote Browser</div>
-        <span style={{ ...styles.pill, background: running ? '#1f6f43' : '#5a3a1f' }}>{state}</span>
-      </header>
+  const chipLabel = phase === 'live' ? 'Live' : phase === 'connecting' ? 'Connecting' : 'Idle';
 
-      <div style={styles.controls}>
-        <button onClick={start} disabled={running} style={{ ...styles.btn, ...(running ? styles.btnDisabled : styles.btnPrimary) }}>
-          Start Browser
-        </button>
-        <button onClick={stop} disabled={!running} style={{ ...styles.btn, ...(!running ? styles.btnDisabled : styles.btnDanger) }}>
-          Stop
-        </button>
-        <form onSubmit={go} style={styles.urlForm}>
+  return (
+    <main className="app">
+      <div className="topbar">
+        <div className="brand">
+          <div className="brand-mark"><CursorGlyph size={18} /></div>
+          <div>
+            <div className="brand-name">Pilot</div>
+            <div className="brand-sub">remote browser</div>
+          </div>
+        </div>
+        <div className="chip" data-state={phase}>
+          <span className="dot" />
+          {chipLabel}
+          {running && <span style={{ color: 'var(--faint)' }}>· {VW}×{VH}</span>}
+        </div>
+      </div>
+
+      <div className="panel">
+        {phase === 'live' ? (
+          <button className="btn btn-danger" onClick={stop}>Stop</button>
+        ) : phase === 'connecting' ? (
+          <button className="btn btn-primary" disabled>
+            <span className="spinner sm" /> Starting…
+          </button>
+        ) : (
+          <button className="btn btn-primary" onClick={start}>Start browser</button>
+        )}
+
+        <form className={'urlbar' + (running ? '' : ' is-disabled')} onSubmit={go}>
+          <span className="glyph">⌕</span>
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://example.com"
-            style={styles.urlInput}
+            placeholder="example.com"
+            disabled={!running}
+            spellCheck={false}
+            aria-label="URL to open in the remote browser"
           />
-          <button type="submit" disabled={!running} style={{ ...styles.btn, ...(!running ? styles.btnDisabled : styles.btnPrimary) }}>
-            Go
-          </button>
+          <button type="submit" className="btn btn-ghost" disabled={!running}>Go →</button>
         </form>
       </div>
 
-      <div style={styles.statusBar}>{statusMsg}</div>
+      <div className="statusline">{statusMsg}</div>
 
-      <div ref={stageRef} tabIndex={0} onKeyDown={onKeyDown} style={styles.stage}>
+      <div
+        ref={stageRef}
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+        className={'stage' + (running ? ' is-live' : '')}
+      >
         <canvas
           ref={canvasRef}
           width={VW}
@@ -148,51 +194,35 @@ export default function Home() {
           onMouseUp={onMouseUp}
           onMouseMove={onMouseMove}
           onContextMenu={onContextMenu}
-          style={styles.canvas}
         />
-        {!running && <div style={styles.overlay}>Click “Start Browser” to begin</div>}
+
+        {phase === 'connecting' && (
+          <div className="overlay">
+            <div className="loading">
+              <div className="spinner" />
+              <div className="loading-text">{statusMsg}</div>
+            </div>
+          </div>
+        )}
+
+        {phase === 'idle' && (
+          <div className="overlay">
+            <div>
+              <div className="empty-mark"><Logo size={46} /></div>
+              <div className="empty-title">Spin up a browser you can drive</div>
+              <div className="empty-sub">
+                Press Start and a headless Chrome boots inside a Docker container. Its screen streams
+                here live — click, scroll, and type to drive it.
+              </div>
+              <div className="empty-cue"><span className="arrow">↑</span> Press Start to begin</div>
+            </div>
+          </div>
+        )}
       </div>
 
-      <p style={styles.hint}>
-        Click the screen to focus it, then click / scroll / type — input is sent to the headless browser.
-      </p>
+      <div className="hint">
+        Click the screen to focus it, then <kbd>click</kbd> <kbd>scroll</kbd> <kbd>type</kbd> — your input goes to the remote browser.
+      </div>
     </main>
   );
 }
-
-const styles = {
-  main: { maxWidth: 1320, margin: '0 auto', padding: 16 },
-  header: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 },
-  title: { fontSize: 20, fontWeight: 700 },
-  pill: { padding: '2px 10px', borderRadius: 999, fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
-  controls: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 },
-  urlForm: { display: 'flex', gap: 8, flex: 1, minWidth: 280 },
-  urlInput: { flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid #30363d', background: '#0d1117', color: '#e6edf3' },
-  btn: { padding: '8px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600, color: '#fff' },
-  btnPrimary: { background: '#2563eb' },
-  btnDanger: { background: '#b91c1c' },
-  btnDisabled: { background: '#30363d', cursor: 'not-allowed', color: '#8b949e' },
-  statusBar: { fontSize: 13, color: '#8b949e', marginBottom: 8, minHeight: 18 },
-  stage: {
-    position: 'relative',
-    width: '100%',
-    aspectRatio: `${VW} / ${VH}`,
-    border: '1px solid #30363d',
-    borderRadius: 10,
-    overflow: 'hidden',
-    background: '#000',
-    outline: 'none',
-  },
-  canvas: { width: '100%', height: '100%', display: 'block', cursor: 'crosshair' },
-  overlay: {
-    position: 'absolute',
-    inset: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: '#8b949e',
-    fontSize: 16,
-    pointerEvents: 'none',
-  },
-  hint: { fontSize: 12, color: '#6e7681', marginTop: 8 },
-};
